@@ -28,8 +28,8 @@ class Category(models.Model):
                                on_delete=models.CASCADE,blank=True, null=True)
     name = models.CharField(max_length=255)
     title = models.CharField(max_length=255, blank=True, null=True)
-    description = models.TextField()
-    thumbnail = models.ImageField(upload_to=category_thumbnail_directory)
+    description = models.TextField(blank=True, null=True)
+    thumbnail = models.ImageField(upload_to=category_thumbnail_directory, blank=True, null=True)
     slug = models.CharField(max_length=128)
 
     #se define esta clase en los modelos para que se puedan leer de una manera
@@ -70,7 +70,7 @@ class Post(models.Model):
 
     #Para ver nuestro modelo ordenado en el admin manager Django, se definen clases meta:
     class Meta:
-        ordering = ("-published")
+        ordering = ("status","-created_at")
 
     #se define esta clase en los modelos para que se puedan leer de una manera
     #ordenada/correcta la clase en el admin manager django:
