@@ -51,7 +51,9 @@ PROJECT_APPS = [
 
 THIRD_PARTY_APPS=[
     'rest_framework',
-    'channels'
+    'channels',
+    'ckeditor',
+    'ckeditor_uploader',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + PROJECT_APPS + THIRD_PARTY_APPS
@@ -66,6 +68,15 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+CKEDITOR_CONFIGS = {
+    'default': {
+        'toolbar':'full',
+         'autoParagraph':False
+    }
+}
+
+CKEDITOR_UPLOAD_PATH = 'media/'
 
 ROOT_URLCONF = 'core.urls'
 
