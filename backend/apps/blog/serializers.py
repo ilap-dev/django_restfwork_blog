@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Post,Category,Heading, PostView
+from .models import Post,Category,Heading,PostView,PostAnalytics
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -47,3 +47,8 @@ class PostListSerializer(serializers.ModelSerializer):
             "slug",
             "category"
         ]
+
+class PostAnalyticsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PostAnalytics
+        fields = "__all___"

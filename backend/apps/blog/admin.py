@@ -1,6 +1,7 @@
 from django.contrib import admin
 
-from .models import Category, Post, Heading
+from .models import Category, Post, Heading, PostAnalytics
+
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
@@ -38,3 +39,10 @@ class PostAdmin(admin.ModelAdmin):
         })
     )
     inlines = [HeadingInline]
+
+@admin.register(PostAnalytics)
+class PostAnalyticsAdmin(admin.ModelAdmin):
+    list_display = ('views','impressions','clicks','click_through_rate','avg_time_on_page')
+    list_filter = ('views','impressions','clicks','click_through_rate','avg_time_on_page')
+    ordering = ('views','impressions','clicks',)
+    readonly_fields = ('views','impressions','clicks','click_through_rate','avg_time_on_page')

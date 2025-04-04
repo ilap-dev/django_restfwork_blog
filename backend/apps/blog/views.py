@@ -3,10 +3,14 @@ from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.exceptions import NotFound, APIException
+import redis
+from django.conf import settings
 
 from .models import Post, Heading, PostAnalytics
 from .serializers import PostListSerializer, PostSerializer, HeadingSerializer, PostView
-from .tasks import increment_post_impressions
+#from .tasks import increment_post_impressions
+
+redis_client = redis.StrictRedis(host=settings.REDIS_HOST, port=6379, db=0)
 
 #class PostListView(ListAPIView):
 #    queryset = Post.objects.all()
@@ -16,12 +20,15 @@ class PostListView(APIView):
     def get(self, request, *args, **kwargs):
         try:
             posts = Post.postobjects.all()
+
             if not posts.exists():
                 raise NotFound(detail="No Posts Found!")
-            serialized_posts = PostListSerializer(posts, many=True).data
-            for post in posts:
-                increment_post_impressions.delay(post.id)
 
+            for post in posts:
+                redis_client.incr(f"post:impressions:{post.id}")
+                #increment_post_impressions.delay(post.id)
+
+            serialized_posts = PostListSerializer(posts, many=True).data
         except Post.DoesNotExist:
             raise NotFound(detail="No Posts Found!")
         except Exception as e:

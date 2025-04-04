@@ -180,6 +180,9 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.AllowAny"
     ]
 }
+
+REDIS_HOST = env("REDIS_HOST")
+
 #se usa uvicorn y channels para usar asgi, y nuestra aplicacion sea mas rapida
 CHANNELS_LAYERS = {
     "default":{
