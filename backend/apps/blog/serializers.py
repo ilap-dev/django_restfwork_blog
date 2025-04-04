@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Post,Category,Heading
+from .models import Post,Category,Heading, PostView
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
@@ -22,6 +22,10 @@ class HeadingSerializer(serializers.ModelSerializer):
                   "order",
                   ]
 
+class PostViewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PostView
+        fields = "__all___"
 
 class PostSerializer(serializers.ModelSerializer):
     category = CategorySerializer()

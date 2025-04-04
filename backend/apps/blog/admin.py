@@ -10,6 +10,7 @@ class CategoryAdmin(admin.ModelAdmin):
     list_filter = ('parent',)
     ordering = ('name',)
     readonly_fields = ('id',)
+    list_editable = ('title',)
 
 class HeadingInline(admin.TabularInline):
     model = Heading

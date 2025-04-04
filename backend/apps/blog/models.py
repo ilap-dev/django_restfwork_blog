@@ -3,6 +3,8 @@ from django.db import models
 from django.utils.timezone import now
 from django.utils.text import slugify
 from ckeditor.fields import RichTextField
+from .utils import get_client_ip
+
 
 #Crear una funcion que permita guardar la imagen en el blog especifico
 #creado por el usuario
@@ -37,7 +39,6 @@ class Category(models.Model):
     #ordenada/correcta la clase en el admin manager django:
     def __str__(self):
         return self.name
-
 
 
 class Post(models.Model):
@@ -80,6 +81,42 @@ class Post(models.Model):
     def __str__(self):
         return self.title
 
+class PostView(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='post_view')
+    ip_address = models.GenericIPAddressField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+class PostAnalytics(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='post_analytics')
+    views = models.PositiveIntegerField(default=0)
+    impressions = models.PositiveIntegerField(default=0)
+    clicks = models.PositiveIntegerField(default=0)
+    click_through_rate = models.FloatField(default=0)
+    avg_time_on_page = models.FloatField(default=0)
+
+    def increment_click(self):
+        self.clicks += 1
+        self.save()
+        self._update_click_through_rate()
+
+    def _update_click_through_rate(self):
+        if self.impressions > 0:
+            self.click_through_rate = (self.clicks/self.impressions) * 100
+            self.save()
+
+    def increment_impression(self):
+        self.impressions += 1
+        self.save()
+        self._update_click_through_rate()
+
+    def increment_view(self, request):
+        ip_address = get_client_ip(request)
+        if not PostView.objects.filter(post=self.post, ip_address=ip_address).exists():
+            PostView.objects.create(post=self.post, ip_address=ip_address)
+            self.views +=1
+            self.save()
 
 
 class Heading(models.Model):

@@ -54,6 +54,7 @@ THIRD_PARTY_APPS=[
     'channels',
     'ckeditor',
     'ckeditor_uploader',
+    'django_celery_results',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + PROJECT_APPS + THIRD_PARTY_APPS
@@ -175,7 +176,7 @@ REST_FRAMEWORK = {
     #Si una persona esta autenticada puede hacer uso completo del CRUD
     #Sino solo puede hacer uso de los get
     "DEFAULT_PERMISSION_CLASSES":[
-        "rest_framework.permissions.IsAuthenticatedOrReadOnly"
+        "rest_framework.permissions.AllowAny"
     ]
 }
 #se usa uvicorn y channels para usar asgi, y nuestra aplicacion sea mas rapida
@@ -199,3 +200,21 @@ CACHES = {
 }
 
 CHANNELS_ALLOWED_ORIGINS = "http://localhost:3000"
+
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = "America/MexicoCity"
+
+CELERY_BROKER_URL = env("REDIS_URL")
+CELERY_BROKER_TRANSPORT_OPTIONS = {
+    'visibility_timeout': 3600,
+    'socket_timeout': 5,
+    'retry_on_timeout': True
+}
+
+CELERY_RESULT_BACKEND = 'django-db'
+CELERY_CACHE_BACKEND = 'default'
+CELERY_IMPORTS = (
+    'core.tasks',
+)
