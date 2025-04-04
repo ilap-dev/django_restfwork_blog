@@ -55,6 +55,7 @@ THIRD_PARTY_APPS=[
     'ckeditor',
     'ckeditor_uploader',
     'django_celery_results',
+    'django_celery_beat',
 ]
 
 INSTALLED_APPS = DJANGO_APPS + PROJECT_APPS + THIRD_PARTY_APPS
@@ -219,3 +220,6 @@ CELERY_IMPORTS = (
     'core.tasks',
     'apps.blog.tasks'
 )
+
+CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
+CELERY_BEAT_SCHEDULE = {}
