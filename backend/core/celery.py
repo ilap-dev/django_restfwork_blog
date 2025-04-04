@@ -10,7 +10,7 @@ app = Celery("core")
 #Desactivar la configuracion de la ubicacion
 app.conf.enable_utc = False
 #Activar la configuracion de la ubicacion a una establecida por nosotros
-app.conf.update(timezone="America/MexicoCity")
+app.conf.update(timezone="America/Mexico_City")
 
 app.config_from_object("django.conf:settings", namespace="CELERY")
 #Indicarle a celery que automaticamente encuentre las tareas que debe ejecutar
