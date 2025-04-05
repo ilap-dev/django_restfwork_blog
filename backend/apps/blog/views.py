@@ -1,14 +1,15 @@
-
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.exceptions import NotFound, APIException
 import redis
 from django.conf import settings
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 
 from .models import Post, Heading, PostAnalytics
-from .serializers import PostListSerializer, PostSerializer, HeadingSerializer, PostView
-#from .tasks import increment_post_impressions
+from .serializers import PostListSerializer, PostSerializer, HeadingSerializer
+from core.permissions import HasValidAPIKey
 
 redis_client = redis.StrictRedis(host=settings.REDIS_HOST, port=6379, db=0)
 
@@ -17,6 +18,13 @@ redis_client = redis.StrictRedis(host=settings.REDIS_HOST, port=6379, db=0)
 #    serializer_class = PostListSerializer
 
 class PostListView(APIView):
+    #Establecer un api key para permitir/denegar el uso de la solicitud HTTP
+    permission_classes = [HasValidAPIKey]
+
+    #Incluir que nuestra pagina web mantega una cache en redis, permitiendo que nuestra vista sea mas rapida
+    #Sin embargo la actualizacion de las impresiones no se vera reflejada hasta que se elimine el cache
+    #aqui se mantiene la cache por un minuto (60 * 1) y luego se elimina automaticamente
+    @method_decorator(cache_page(60 * 1))
     def get(self, request, *args, **kwargs):
         try:
             posts = Post.postobjects.all()
@@ -42,6 +50,10 @@ class PostListView(APIView):
 #    lookup_field = 'slug'
 
 class PostDetailView(RetrieveAPIView):
+    # Establecer un api key para permitir/denegar el uso de la solicitud HTTP
+    permission_classes = [HasValidAPIKey]
+
+    @method_decorator(cache_page(60 * 1))
     def get(self, request, slug):
         try:
             post = Post.postobjects.get(slug=slug)
@@ -65,6 +77,8 @@ class PostDetailView(RetrieveAPIView):
 
 
 class PostHeadingView(ListAPIView):
+    # Establecer un api key para permitir/denegar el uso de la solicitud HTTP
+    permission_classes = [HasValidAPIKey]
     serializer_class = HeadingSerializer
 
     def get_queryset(self):
@@ -72,6 +86,8 @@ class PostHeadingView(ListAPIView):
         return Heading.objects.filter(post__slug = post_slug)
 
 class IncrementPostClickView(APIView):
+    # Establecer un api key para permitir/denegar el uso de la solicitud HTTP
+    permission_classes = [HasValidAPIKey]
 
     def post(self,request):
         """Incrementa el contador de clicks de un post basado en su slug"""
