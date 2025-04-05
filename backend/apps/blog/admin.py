@@ -42,7 +42,12 @@ class PostAdmin(admin.ModelAdmin):
 
 @admin.register(PostAnalytics)
 class PostAnalyticsAdmin(admin.ModelAdmin):
-    list_display = ('views','impressions','clicks','click_through_rate','avg_time_on_page')
-    list_filter = ('views','impressions','clicks','click_through_rate','avg_time_on_page')
-    ordering = ('views','impressions','clicks',)
-    readonly_fields = ('views','impressions','clicks','click_through_rate','avg_time_on_page')
+    list_display = ('post_title','views','impressions','clicks','click_through_rate','avg_time_on_page',)
+    search_fields = ('post_title','views','impressions','clicks','click_through_rate','avg_time_on_page',)
+    readonly_fields = ('post','post_title','views','impressions','clicks','click_through_rate','avg_time_on_page',)
+    ordering = ('-views','-impressions','-clicks','-click_through_rate',)
+
+    def post_title(self,obj):
+        return obj.post.title
+
+    post_title.short_description = 'Post Title'

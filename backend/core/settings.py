@@ -223,6 +223,7 @@ CELERY_IMPORTS = (
     'core.tasks',
     'apps.blog.tasks'
 )
-
+# para migrar las base de datos de celery beat, usar en una line de comandos bash:
+# python manage.py migrate django_celery_beat
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 CELERY_BEAT_SCHEDULE = {}

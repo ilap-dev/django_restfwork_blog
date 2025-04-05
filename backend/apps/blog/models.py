@@ -1,5 +1,7 @@
 import uuid
 from django.db import models
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 from django.utils.timezone import now
 from django.utils.text import slugify
 from ckeditor.fields import RichTextField
@@ -57,7 +59,7 @@ class Post(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=128)
     description =  models.CharField(max_length=256)
-    views = models.PositiveIntegerField(default=0)  # Agregar el campo con valor predeterminado
+    #views = models.PositiveIntegerField(default=0)  # Agregar el campo con valor predeterminado
     #Cuando se borre la categoria de este post, usando 'on_delete=models.PROTECT'
     # se proteje el post, es decir no se borra este post
     category = models.ForeignKey(Category, on_delete=models.PROTECT)
@@ -70,7 +72,6 @@ class Post(models.Model):
     status = models.CharField(max_length=12, choices=status_options, default='draft')
     objects = models.Manager() #default manager
     postobjects = PostObjects() #custom manager
-
 
     #Para ver nuestro modelo ordenado en el admin manager Django, se definen clases meta:
     class Meta:
@@ -147,3 +148,8 @@ class Heading(models.Model):
         if not self.slug:
             self.slug = slugify(self.title) #slugify: Convierte los espacios en blanco en guiones '-'
         super().save(*args, **kwargs)
+
+@receiver(post_save, sender=Post)
+def create_post_analytics(sender, instance, created, **kwargs):
+    if created:
+        PostAnalytics.objects.create(post=instance)
