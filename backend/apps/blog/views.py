@@ -1,15 +1,23 @@
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.views import APIView
+from rest_framework_api.views import StandardAPIView
 from rest_framework.response import Response
 from rest_framework.exceptions import NotFound, APIException
 import redis
 from django.conf import settings
 from django.utils.decorators import method_decorator
+
+#Hacer cache predeterminado (1 minuto) que se guarda en redis
 from django.views.decorators.cache import cache_page
+
+#Hacer cache personalizada que se guarda en redis
+from django.core.cache import cache
 
 from .models import Post, Heading, PostAnalytics
 from .serializers import PostListSerializer, PostSerializer, HeadingSerializer
 from core.permissions import HasValidAPIKey
+from .utils import get_client_ip
+from .tasks import increment_post_view_task
 
 redis_client = redis.StrictRedis(host=settings.REDIS_HOST, port=6379, db=0)
 
@@ -17,73 +25,107 @@ redis_client = redis.StrictRedis(host=settings.REDIS_HOST, port=6379, db=0)
 #    queryset = Post.objects.all()
 #    serializer_class = PostListSerializer
 
-class PostListView(APIView):
+class PostListView(StandardAPIView):
     #Establecer un api key para permitir/denegar el uso de la solicitud HTTP
-    permission_classes = [HasValidAPIKey]
+    #permission_classes = [HasValidAPIKey]
 
-    #Incluir que nuestra pagina web mantega una cache en redis, permitiendo que nuestra vista sea mas rapida
-    #Sin embargo la actualizacion de las impresiones no se vera reflejada hasta que se elimine el cache
-    #aqui se mantiene la cache por un minuto (60 * 1) y luego se elimina automaticamente
-    @method_decorator(cache_page(60 * 1))
     def get(self, request, *args, **kwargs):
         try:
+            #HACER CACHE PERSONALIZADA
+            #Verificar si los datos que se requieren estan en una cache guardada
+            cached_posts = cache.get("post_list")
+            #si existe retornar la cache a la vista del usuario
+            if cached_posts:
+                for post in cached_posts:
+                    # incrementar impressiones en redis
+                    redis_client.incr(f"post:impressions:{post['id']}")
+                return self.paginate(request, cached_posts)
+
+            # si no existe, obtener los posts de la base de datos
             posts = Post.postobjects.all()
 
             if not posts.exists():
                 raise NotFound(detail="No Posts Found!")
 
+            #Serializamos los datos de los posts
+            serialized_posts = PostListSerializer(posts, many=True).data
+
+            #Guardar datos de los posts/la vista del usuario en la cache llamada "post_list"
+            cache.set("post_list", serialized_posts, timeout=(60 * 5) )
+
             for post in posts:
-                redis_client.incr(f"post:impressions:{post.id}")
+                #incrementar impressiones en redis
+                redis_client.incr(f"post:impressions:{post['id']}")
                 #increment_post_impressions.delay(post.id)
 
-            serialized_posts = PostListSerializer(posts, many=True).data
-        except Post.DoesNotExist:
-            raise NotFound(detail="No Posts Found!")
         except Exception as e:
             raise APIException(detail=f"An Unexpected Error Ocurred: {str(e)}")
 
-        return Response(serialized_posts)
+        return self.paginate(request, serialized_posts)
 
 #class PostDetailView(RetrieveAPIView):
 #    queryset = Post.objects.all()
 #    serializer_class = PostSerializer
 #    lookup_field = 'slug'
 
-class PostDetailView(RetrieveAPIView):
+class PostDetailView(StandardAPIView):
     # Establecer un api key para permitir/denegar el uso de la solicitud HTTP
-    permission_classes = [HasValidAPIKey]
+    #permission_classes = [HasValidAPIKey]
 
-    @method_decorator(cache_page(60 * 1))
-    def get(self, request, slug):
+    def get(self, request):
+        ip_address = get_client_ip(request)
+        slug = request.query_params.get("slug")
         try:
+            cached_post = cache.get(f"post_detail:{slug}")
+            if cached_post:
+                increment_post_view_task.delay(cached_post['slug'], ip_address)
+                return self.response(cached_post)
+            #sino esta en cache, obtener el post de la base de datos
             post = Post.postobjects.get(slug=slug)
+            serialized_post = PostSerializer(post).data
+            #Guardar el post en la cache
+            cache.set(f"post_detail:{slug}", serialized_post, timeout=(60*5))
+
+            # TODO Incrementar vistas en segundo plano
+            increment_post_view_task.delay(post.slug, ip_address)
+
         except Post.DoesNotExist:
             raise NotFound(detail="The request Post does not exist")
         except Exception as e:
-            raise APIException(detail=f"An Unexpected Error Ocurred: {str(e)}")
-        serialized_post = PostSerializer(post).data
+            raise APIException(detail=f"An Unexpected Error Ocurred HERE: {str(e)}")
 
-        try:
+        """try:
             post_analytics = PostAnalytics.objects.get(post=post)
-            post_analytics.increment_view(request)
+            post_analytics.increment_view(ip_address)
         except PostAnalytics.DoesNotExist:
             raise NotFound(
                 detail="The Analytics Data for this Post does not exist")
         except Exception as e:
             raise APIException(
                 detail=f"An Unexpected Error Ocurred While updating Post Analytics: {str(e)}")
+        """
 
-        return Response(serialized_post)
+        return self.response(serialized_post)
 
 
-class PostHeadingView(ListAPIView):
+class PostHeadingView(StandardAPIView):
     # Establecer un api key para permitir/denegar el uso de la solicitud HTTP
-    permission_classes = [HasValidAPIKey]
-    serializer_class = HeadingSerializer
+    #permission_classes = [HasValidAPIKey]
+    def get(self, request):
+        post_slug = request.query_params.get("slug")
+        heading_objects = Heading.objects.filter(post__slug=post_slug)
+        serialized_data = HeadingSerializer(heading_objects, many=True).data
+        return self.response(serialized_data)
 
-    def get_queryset(self):
-        post_slug = self.kwargs.get('slug')
-        return Heading.objects.filter(post__slug = post_slug)
+    # serializer_class = HeadingSerializer
+    #HACER CACHE AUTOMATICA de 1 minuto
+    # Incluir que nuestra pagina web mantega una cache en redis, permitiendo que nuestra vista sea mas rapida
+    # Sin embargo las actualizaciones no se veran reflejadas hasta que se elimine el cache
+    # aqui se mantiene la cache por un minuto (60 * 1) y luego se elimina automaticamente
+    #@method_decorator(cache_page(60 * 1))
+    #def get_queryset(self):
+        #post_slug = self.kwargs.get('slug')
+        #return Heading.objects.filter(post__slug = post_slug)
 
 class IncrementPostClickView(APIView):
     # Establecer un api key para permitir/denegar el uso de la solicitud HTTP

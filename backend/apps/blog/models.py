@@ -6,16 +6,17 @@ from django.utils.timezone import now
 from django.utils.text import slugify
 from ckeditor.fields import RichTextField
 from .utils import get_client_ip
+from core.storage_backends import PublicMediaStorage
 
 
 #Crear una funcion que permita guardar la imagen en el blog especifico
 #creado por el usuario
 def blog_thumbnail_directory(instance, filename):
-    return "blog/{0}/{1}".format(instance.title, filename)
+    return "thumbnails/blog/{0}/{1}".format(instance.title, filename)
 
 #Crear una funcion que permita guardar la imagen de una categoria especifica
 def category_thumbnail_directory(instance, filename):
-    return "blog_categories/{0}/{1}".format(instance.name, filename)
+    return "thumbnails/blog_categories/{0}/{1}".format(instance.name, filename)
 
 class Category(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -42,7 +43,6 @@ class Category(models.Model):
     def __str__(self):
         return self.name
 
-
 class Post(models.Model):
 
     #Aqui se configura que cuando los usuarios hagan una peticion/request POST, el servicio
@@ -64,7 +64,7 @@ class Post(models.Model):
     # se proteje el post, es decir no se borra este post
     category = models.ForeignKey(Category, on_delete=models.PROTECT)
     content = RichTextField(blank=True, null=True)
-    thumbnail = models.ImageField(upload_to=blog_thumbnail_directory)
+    thumbnail = models.ImageField(upload_to=blog_thumbnail_directory, storage=PublicMediaStorage())
     keywords = models.CharField(max_length=128)
     slug = models.CharField(max_length=128)
     created_at = models.DateTimeField(default=now)
@@ -105,15 +105,17 @@ class PostAnalytics(models.Model):
     def _update_click_through_rate(self):
         if self.impressions > 0:
             self.click_through_rate = (self.clicks/self.impressions) * 100
-            self.save()
+        else:
+            self.click_through_rate = 0
+        self.save()
 
     def increment_impression(self):
         self.impressions += 1
         self.save()
         self._update_click_through_rate()
 
-    def increment_view(self, request):
-        ip_address = get_client_ip(request)
+    def increment_view(self, ip_address):
+        #ip_address = get_client_ip(request)
         if not PostView.objects.filter(post=self.post, ip_address=ip_address).exists():
             PostView.objects.create(post=self.post, ip_address=ip_address)
             self.views +=1
