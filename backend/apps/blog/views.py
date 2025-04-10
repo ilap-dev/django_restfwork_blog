@@ -36,6 +36,7 @@ class PostListView(StandardAPIView):
             cached_posts = cache.get("post_list")
             #si existe retornar la cache a la vista del usuario
             if cached_posts:
+                #serialized_posts = PostListSerializer(cached_posts, many=True).data
                 for post in cached_posts:
                     # incrementar impressiones en redis
                     redis_client.incr(f"post:impressions:{post['id']}")

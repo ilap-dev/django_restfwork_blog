@@ -1,11 +1,12 @@
 from django.contrib import admin
 
 from .models import Category, Post, Heading, PostAnalytics
+from ..media.models import Media
 
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ('name','title','parent','slug')
+    list_display = ('name','title','parent','slug','thumbnail_preview')
     search_fields = ('name','title','description','slug')
     prepopulated_fields = {'slug':('name',)}
     list_filter = ('parent',)
@@ -20,11 +21,16 @@ class HeadingInline(admin.TabularInline):
     prepopulated_fields = {'slug':('title',)}
     ordering = ('order',)
 
+class MediaInline(admin.TabularInline):
+    model = Media
+    extra = 1
+    fields = ('order','name','size','type','key','media_type')
+
 
 @admin.register(Post)
 class PostAdmin(admin.ModelAdmin):
 
-    list_display = ('title','status','category','created_at','updated_at')
+    list_display = ('title','status','category','created_at','updated_at', 'thumbnail_preview')
     search_fields = ('title','description','content','keywords','slug')
     prepopulated_fields = {'slug':('title',)}
     list_filter = ('status','category','updated_at')
@@ -32,7 +38,7 @@ class PostAdmin(admin.ModelAdmin):
     readonly_fields = ('id','created_at','updated_at')
     fieldsets = (
         ('General Information',{
-            'fields':('title','description','content','thumbnail','keywords','slug','category')
+            'fields':('title','description','content','keywords','slug','category')
         }),
         ('Status & Dates',{
             'fields':('status','created_at','updated_at')

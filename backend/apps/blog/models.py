@@ -1,22 +1,29 @@
 import uuid
+
+from django.core.serializers import serialize
 from django.db import models
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from django.utils.html import format_html
 from django.utils.timezone import now
 from django.utils.text import slugify
 from ckeditor.fields import RichTextField
 from .utils import get_client_ip
 from core.storage_backends import PublicMediaStorage
+from ..media.models import Media
+from ..media.serializers import MediaSerializer
 
 
 #Crear una funcion que permita guardar la imagen en el blog especifico
 #creado por el usuario
 def blog_thumbnail_directory(instance, filename):
-    return "thumbnails/blog/{0}/{1}".format(instance.title, filename)
+    sanitized_title = instance.title.replace(" ","_")
+    return "thumbnails/blog/{0}/{1}".format(sanitized_title, filename)
 
 #Crear una funcion que permita guardar la imagen de una categoria especifica
 def category_thumbnail_directory(instance, filename):
-    return "thumbnails/blog_categories/{0}/{1}".format(instance.name, filename)
+    sanitized_name = instance.name.replace(" ", "_")
+    return "thumbnails/blog_categories/{0}/{1}".format(sanitized_name, filename)
 
 class Category(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -35,13 +42,25 @@ class Category(models.Model):
     name = models.CharField(max_length=255)
     title = models.CharField(max_length=255, blank=True, null=True)
     description = models.TextField(blank=True, null=True)
-    thumbnail = models.ImageField(upload_to=category_thumbnail_directory, blank=True, null=True)
+    thumbnail = models.ForeignKey(Media, on_delete=models.SET_NULL,
+                                  related_name='blog_category_thumbnail', blank=True, null=True)
+    #thumbnail = models.ImageField(upload_to=category_thumbnail_directory, blank=True, null=True)
     slug = models.CharField(max_length=128)
 
     #se define esta clase en los modelos para que se puedan leer de una manera
     #ordenada/correcta la clase en el admin manager django:
     def __str__(self):
         return self.name
+
+    def thumbnail_preview(self):
+        if self.thumbnail:
+            serializer = MediaSerializer(instance=self.thumbnail)
+            url = serializer.data.get('url')
+            if url:
+                return format_html('<img src="{}" style="width: 100px; height: auto; />',url)
+        return 'No Thumbnail'
+    thumbnail_preview.short_description = "Thumbnail Preview"
+
 
 class Post(models.Model):
 
@@ -64,7 +83,10 @@ class Post(models.Model):
     # se proteje el post, es decir no se borra este post
     category = models.ForeignKey(Category, on_delete=models.PROTECT)
     content = RichTextField(blank=True, null=True)
-    thumbnail = models.ImageField(upload_to=blog_thumbnail_directory, storage=PublicMediaStorage())
+    #thumbnail = models.ImageField(upload_to=blog_thumbnail_directory, storage=PublicMediaStorage())
+    thumbnail = models.ForeignKey(Media, on_delete=models.SET_NULL,
+                                  related_name='post_thumbnail', blank=True, null=True)
+
     keywords = models.CharField(max_length=128)
     slug = models.CharField(max_length=128)
     created_at = models.DateTimeField(default=now)
@@ -81,6 +103,16 @@ class Post(models.Model):
     #ordenada/correcta la clase en el admin manager django:
     def __str__(self):
         return self.title
+
+    def thumbnail_preview(self):
+        if self.thumbnail:
+            serializer = MediaSerializer(instance=self.thumbnail)
+            url = serializer.data.get('url')
+            if url:
+                return format_html('<img src="{}" style="width: 100px; height: auto; />',url)
+        return 'No Thumbnail'
+    thumbnail_preview.short_description = "Thumbnail Preview"
+
 
 class PostView(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

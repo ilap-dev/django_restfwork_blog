@@ -263,11 +263,11 @@ AWS_S3_OBJECT_PARAMETERS ={
 STATIC_LOCATION = "static"
 STATIC_URL = f"{AWS_S3_CUSTOM_DOMAIN}/{STATIC_LOCATION}/"
 STATICFILES_STORAGE = 'core.storage_backends.StaticStorage'
-STATIC_ROOT = os.path.join(BASE_DIR, "static")
+#STATIC_ROOT = os.path.join(BASE_DIR, "static")
 
 MEDIA_LOCATION = "media"
 MEDIA_URL = f"{AWS_S3_CUSTOM_DOMAIN}/{MEDIA_LOCATION}/"
-MEDIA_ROOT = MEDIA_URL
+#MEDIA_ROOT = MEDIA_URL
 
 #Configuracion de almacenamiento predeterminado
 DEFAULT_FILE_STORAGE = "core.storage_backends.PublicMediaStorage"
