@@ -49,7 +49,8 @@ DJANGO_APPS = [
 ]
 
 PROJECT_APPS = [
-    'apps.blog'
+    'apps.blog',
+    'apps.media',
 ]
 
 THIRD_PARTY_APPS=[
@@ -260,7 +261,7 @@ AWS_S3_OBJECT_PARAMETERS ={
 
 #Configuracion de Archivos Estaticos
 STATIC_LOCATION = "static"
-STATIC_URL = f"{AWS_S3_DOMAIN}/{STATIC_LOCATION}/"
+STATIC_URL = f"{AWS_S3_CUSTOM_DOMAIN}/{STATIC_LOCATION}/"
 STATICFILES_STORAGE = 'core.storage_backends.StaticStorage'
 STATIC_ROOT = os.path.join(BASE_DIR, "static")
 
@@ -269,7 +270,7 @@ MEDIA_URL = f"{AWS_S3_CUSTOM_DOMAIN}/{MEDIA_LOCATION}/"
 MEDIA_ROOT = MEDIA_URL
 
 #Configuracion de almacenamiento predeterminado
-DEFAULT_FILE_STORAGE = "storages.backends.PublicMediaStorage"
+DEFAULT_FILE_STORAGE = "core.storage_backends.PublicMediaStorage"
 
 
 
