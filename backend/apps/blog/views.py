@@ -1,3 +1,5 @@
+import uuid
+
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.views import APIView
 from rest_framework_api.views import StandardAPIView
@@ -13,11 +15,15 @@ from django.views.decorators.cache import cache_page
 #Hacer cache personalizada que se guarda en redis
 from django.core.cache import cache
 
-from .models import Post, Heading, PostAnalytics
+from .models import Post, Heading, PostAnalytics, Category
 from .serializers import PostListSerializer, PostSerializer, HeadingSerializer
 from core.permissions import HasValidAPIKey
 from .utils import get_client_ip
 from .tasks import increment_post_view_task
+
+from faker import Faker
+import random
+from django.utils.text import slugify
 
 redis_client = redis.StrictRedis(host=settings.REDIS_HOST, port=6379, db=0)
 
@@ -108,7 +114,6 @@ class PostDetailView(StandardAPIView):
 
         return self.response(serialized_post)
 
-
 class PostHeadingView(StandardAPIView):
     # Establecer un api key para permitir/denegar el uso de la solicitud HTTP
     #permission_classes = [HasValidAPIKey]
@@ -150,3 +155,51 @@ class IncrementPostClickView(APIView):
             "message":"Click Incremented Successfully",
             "clicks": post_analytics.clicks
         })
+
+class GenerateFakePostsView(StandardAPIView):
+    def get(self, request):
+        fake = Faker()
+        categories = list(Category.objects.all())
+        if not categories:
+            return self.response("No hay categorias disponibles para asignar a los posts",400)
+
+        posts_to_generate = 100
+        status_options = ["draft", "published"]
+        for _ in range(posts_to_generate):
+            title = fake.sentence(nb_words=6)
+            post = Post(
+                id=uuid.uuid4(),
+                title=title,
+                description = fake.sentence(nb_words=12),
+                content=fake.paragraph(nb_sentences=5),
+                keywords=", ".join(fake.words(nb=5)),
+                slug=slugify(title),
+                category=random.choice(categories),
+                status=random.choice(status_options),
+            )
+            post.save()
+        return self.response(f"{posts_to_generate} posts generados exitosamente.")
+
+class GenerateFakeAnalyticsView(StandardAPIView):
+    def get(self, request):
+        fake = Faker()
+
+        posts = Post.objects.all()
+        if not posts:
+            return self.response({"error":"No hay posts disponibles para generar analiticas"}, status=400)
+
+        analytics_to_generate = len(posts)
+        for post in posts:
+            views = random.randint(50,1000)
+            impressions = views + random.randint(100,2000)
+            clicks = random.randint(0, views)
+            avg_time_on_page = round(random.uniform(10,300), 2)
+
+            analytics, created = PostAnalytics.objects.get_or_create(post=post)
+            analytics.views = views
+            analytics.impressions = impressions
+            analytics.clicks = clicks
+            analytics.avg_time_on_page = avg_time_on_page
+            analytics._update_click_through_rate()
+            analytics.save()
+        return self.response({"message": f"Analiticas generadas para {analytics_to_generate} posts."})

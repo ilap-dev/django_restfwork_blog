@@ -6,12 +6,12 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils.html import format_html
 from django.utils.timezone import now
-from django.utils.text import slugify
 from ckeditor.fields import RichTextField
 from .utils import get_client_ip
 from core.storage_backends import PublicMediaStorage
 from ..media.models import Media
 from ..media.serializers import MediaSerializer
+from django.utils.text import slugify
 
 
 #Crear una funcion que permita guardar la imagen en el blog especifico
@@ -60,7 +60,6 @@ class Category(models.Model):
                 return format_html('<img src="{}" style="width: 100px; height: auto; />',url)
         return 'No Thumbnail'
     thumbnail_preview.short_description = "Thumbnail Preview"
-
 
 class Post(models.Model):
 
@@ -113,7 +112,6 @@ class Post(models.Model):
         return 'No Thumbnail'
     thumbnail_preview.short_description = "Thumbnail Preview"
 
-
 class PostView(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='post_view')
@@ -152,7 +150,6 @@ class PostAnalytics(models.Model):
             PostView.objects.create(post=self.post, ip_address=ip_address)
             self.views +=1
             self.save()
-
 
 class Heading(models.Model):
     """Crear una clase que permita crear un menu html del post"""
