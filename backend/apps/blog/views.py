@@ -14,16 +14,15 @@ from django.views.decorators.cache import cache_page
 
 #Hacer cache personalizada que se guarda en redis
 from django.core.cache import cache
-
 from .models import Post, Heading, PostAnalytics, Category
-from .serializers import PostListSerializer, PostSerializer, HeadingSerializer
+from .serializers import PostListSerializer, PostSerializer, HeadingSerializer, CategoryListSerializer
 from core.permissions import HasValidAPIKey
 from .utils import get_client_ip
 from .tasks import increment_post_view_task
-
 from faker import Faker
 import random
 from django.utils.text import slugify
+from django.db.models import Q, F, Prefetch
 
 redis_client = redis.StrictRedis(host=settings.REDIS_HOST, port=6379, db=0)
 
@@ -37,38 +36,76 @@ class PostListView(StandardAPIView):
 
     def get(self, request, *args, **kwargs):
         try:
+            search = request.query_params.get("search","").strip()
+            sorting = request.query_params.get("sorting", None)
+            ordering = request.query_params.get("ordering", None)
+            #categories = request.query_params.getlist("category", [])
+            cache_key = f"post_list:{search}:{sorting}:{ordering}"
+
             #HACER CACHE PERSONALIZADA
             #Verificar si los datos que se requieren estan en una cache guardada
-            cached_posts = cache.get("post_list")
+            cached_posts = cache.get(cache_key)
             #si existe retornar la cache a la vista del usuario
             if cached_posts:
-                #serialized_posts = PostListSerializer(cached_posts, many=True).data
+                if search != "":
+                    search_lower = search.lower()
+                    cached_posts = [
+                        post for post in cached_posts
+                        if search_lower in post.get('title','').lower()
+                           or search_lower in post.get('description','').lower()
+                           or search_lower in post.get('content','').lower()
+                           or search_lower in post.get('keywords','').lower()
+                    ]
+
                 for post in cached_posts:
-                    # incrementar impressiones en redis
                     redis_client.incr(f"post:impressions:{post['id']}")
                 return self.paginate(request, cached_posts)
 
             # si no existe, obtener los posts de la base de datos
-            posts = Post.postobjects.all()
+            if search != "":
+                posts = Post.postobjects.filter(
+                    Q(title__icontains=search) |
+                    Q(description__icontains=search) |
+                    Q(content__icontains=search) |
+                    Q(keywords__icontains=search)
+                )
+            else:
+                posts = Post.postobjects.all()
+                #.select_related("category").prefetch_related(
+                #    Prefetch("post_analytics", to_attr="analytics_cache")
+                #))
 
             if not posts.exists():
                 raise NotFound(detail="No Posts Found!")
+
+            if sorting:
+                if sorting == 'newest':
+                    posts = posts.order_by("-created_at")
+                elif sorting == 'recently_updated':
+                    posts = posts.order_by("-updated_at")
+                elif sorting == 'most_viewed':
+                    posts = posts.annotate(popularity=F("post_analytics__views")).order_by("-popularity")
+            if ordering:
+                if ordering == 'az':
+                    posts = posts.order_by("title")
+                if ordering == 'za':
+                    posts = posts.order_by("-title")
 
             #Serializamos los datos de los posts
             serialized_posts = PostListSerializer(posts, many=True).data
 
             #Guardar datos de los posts/la vista del usuario en la cache llamada "post_list"
-            cache.set("post_list", serialized_posts, timeout=(60 * 5) )
+            cache.set(cache_key, serialized_posts, timeout=(60 * 5) )
 
             for post in posts:
                 #incrementar impressiones en redis
-                redis_client.incr(f"post:impressions:{post['id']}")
+                redis_client.incr(f"post:impressions:{post.id}")
                 #increment_post_impressions.delay(post.id)
+
+            return self.paginate(request, serialized_posts)
 
         except Exception as e:
             raise APIException(detail=f"An Unexpected Error Ocurred: {str(e)}")
-
-        return self.paginate(request, serialized_posts)
 
 #class PostDetailView(RetrieveAPIView):
 #    queryset = Post.objects.all()
@@ -96,23 +133,12 @@ class PostDetailView(StandardAPIView):
             # TODO Incrementar vistas en segundo plano
             increment_post_view_task.delay(post.slug, ip_address)
 
+            return self.response(serialized_post)
+
         except Post.DoesNotExist:
             raise NotFound(detail="The request Post does not exist")
         except Exception as e:
             raise APIException(detail=f"An Unexpected Error Ocurred HERE: {str(e)}")
-
-        """try:
-            post_analytics = PostAnalytics.objects.get(post=post)
-            post_analytics.increment_view(ip_address)
-        except PostAnalytics.DoesNotExist:
-            raise NotFound(
-                detail="The Analytics Data for this Post does not exist")
-        except Exception as e:
-            raise APIException(
-                detail=f"An Unexpected Error Ocurred While updating Post Analytics: {str(e)}")
-        """
-
-        return self.response(serialized_post)
 
 class PostHeadingView(StandardAPIView):
     # Establecer un api key para permitir/denegar el uso de la solicitud HTTP
@@ -155,6 +181,53 @@ class IncrementPostClickView(APIView):
             "message":"Click Incremented Successfully",
             "clicks": post_analytics.clicks
         })
+
+class CategoryListView(StandardAPIView):
+    def get(self, request, *args, **kwargs):
+
+        try:
+            search = request.query_params.get("search", "").strip()
+            cache_key = f"category_list:{search}"
+            cached_categories = cache.get(cache_key)
+            if cached_categories:
+                if search != "":
+                    search_lower = search.lower()
+                    cached_categories = [
+                        category for category in cached_categories
+                        if search_lower in category.get('name','').lower()
+                           or search_lower in category.get('description','').lower()
+                           or search_lower in category.get('title','').lower()
+                           or search_lower in category.get('slug', '').lower()
+                    ]
+
+                for category in cached_categories:
+                    redis_client.incr(f"category:impressions:{category.id}")
+                return self.paginate(request, cached_categories)
+
+            categories = Category.objects.all()
+            # si no existe, obtener los posts de la base de datos
+            if search != "":
+                categories = categories.filter(
+                    Q(name__icontains=search) |
+                    Q(description__icontains=search) |
+                    Q(title__icontains=search) |
+                    Q(slug__icontains=search)
+                )
+
+
+            if not categories.exists():
+                raise NotFound(detail="No Categories Found!")
+
+            serialized_categories = CategoryListSerializer(categories, many=True).data
+
+            cache.set(cache_key, serialized_categories, timeout=(60 * 5))
+
+            for category in categories:
+                redis_client.incr(f"category:impressions:{category.id}")
+            return  self.paginate(request, serialized_categories)
+
+        except Exception as e:
+            raise APIException(detail=f"An Unexpected Error Ocurred: {str(e)}")
 
 class GenerateFakePostsView(StandardAPIView):
     def get(self, request):

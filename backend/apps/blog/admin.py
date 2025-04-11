@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Category, Post, Heading, PostAnalytics
+from .models import Category, Post, Heading, PostAnalytics, CategoryAnalytics
 from ..media.models import Media
 
 
@@ -14,6 +14,17 @@ class CategoryAdmin(admin.ModelAdmin):
     readonly_fields = ('id',)
     list_editable = ('title',)
 
+@admin.register(CategoryAnalytics)
+class CategoryAnalyticsAdmin(admin.ModelAdmin):
+    list_display = ('category_name','views','impressions','clicks','click_through_rate','avg_time_on_page',)
+    search_fields = ('category__name',)
+    readonly_fields = ('category','views','impressions','clicks','click_through_rate','avg_time_on_page',)
+
+    def category_name(self,obj):
+        return obj.category.name
+
+    category_name.short_description = 'Category Name'
+
 class HeadingInline(admin.TabularInline):
     model = Heading
     extra = 1
@@ -25,7 +36,6 @@ class MediaInline(admin.TabularInline):
     model = Media
     extra = 1
     fields = ('order','name','size','type','key','media_type')
-
 
 @admin.register(Post)
 class PostAdmin(admin.ModelAdmin):
@@ -49,7 +59,7 @@ class PostAdmin(admin.ModelAdmin):
 @admin.register(PostAnalytics)
 class PostAnalyticsAdmin(admin.ModelAdmin):
     list_display = ('post_title','views','impressions','clicks','click_through_rate','avg_time_on_page',)
-    search_fields = ('post_title','views','impressions','clicks','click_through_rate','avg_time_on_page',)
+    search_fields = ('post__title',)
     readonly_fields = ('post','post_title','views','impressions','clicks','click_through_rate','avg_time_on_page',)
     ordering = ('-views','-impressions','-clicks','-click_through_rate',)
 
