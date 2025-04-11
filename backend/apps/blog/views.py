@@ -14,7 +14,9 @@ from django.views.decorators.cache import cache_page
 
 #Hacer cache personalizada que se guarda en redis
 from django.core.cache import cache
-from .models import Post, Heading, PostAnalytics, Category
+from unicodedata import category
+
+from .models import Post, Heading, PostAnalytics, Category, CategoryAnalytics
 from .serializers import PostListSerializer, PostSerializer, HeadingSerializer, CategoryListSerializer
 from core.permissions import HasValidAPIKey
 from .utils import get_client_ip
@@ -23,6 +25,7 @@ from faker import Faker
 import random
 from django.utils.text import slugify
 from django.db.models import Q, F, Prefetch
+from django.shortcuts import get_object_or_404
 
 redis_client = redis.StrictRedis(host=settings.REDIS_HOST, port=6379, db=0)
 
@@ -133,7 +136,7 @@ class PostDetailView(StandardAPIView):
             # TODO Incrementar vistas en segundo plano
             increment_post_view_task.delay(post.slug, ip_address)
 
-            return self.response(serialized_post)
+            return self.paginate(request, serialized_post)
 
         except Post.DoesNotExist:
             raise NotFound(detail="The request Post does not exist")
@@ -159,9 +162,9 @@ class PostHeadingView(StandardAPIView):
         #post_slug = self.kwargs.get('slug')
         #return Heading.objects.filter(post__slug = post_slug)
 
-class IncrementPostClickView(APIView):
+class IncrementPostClickView(StandardAPIView):
     # Establecer un api key para permitir/denegar el uso de la solicitud HTTP
-    permission_classes = [HasValidAPIKey]
+    #permission_classes = [HasValidAPIKey]
 
     def post(self,request):
         """Incrementa el contador de clicks de un post basado en su slug"""
@@ -177,9 +180,32 @@ class IncrementPostClickView(APIView):
         except Exception as e:
             raise APIException(
                 detail=f"An  Error Ocurred While updating Post Analytics: {str(e)}")
-        return Response({
+        return self.response({
             "message":"Click Incremented Successfully",
             "clicks": post_analytics.clicks
+        })
+
+class IncrementCategoryClickView(StandardAPIView):
+    # Establecer un api key para permitir/denegar el uso de la solicitud HTTP
+    #permission_classes = [HasValidAPIKey]
+
+    def category(self,request):
+        """Incrementa el contador de clicks de un post basado en su slug"""
+        data = request.data
+        try:
+            category = Category.objects.get(slug=data['slug'])
+        except Category.DoesNotExist:
+            raise NotFound(detail="The request category does not exist")
+
+        try:
+            category_analytics, created = CategoryAnalytics.objects.get_or_create(category=category)
+            category_analytics.increment_click()
+        except Exception as e:
+            raise APIException(
+                detail=f"An  Error Ocurred While updating Category Analytics: {str(e)}")
+        return self.response({
+            "message":"Click Incremented Successfully",
+            "clicks": category_analytics.clicks
         })
 
 class CategoryListView(StandardAPIView):
@@ -228,6 +254,28 @@ class CategoryListView(StandardAPIView):
 
         except Exception as e:
             raise APIException(detail=f"An Unexpected Error Ocurred: {str(e)}")
+
+class CategoryDetailView(StandardAPIView):
+    def get(self, request):
+        try:
+            slug = request.query_params.get("slug", None)
+            if not slug:
+                return self.error("Missing Slug Parameter")
+
+            category = get_object_or_404(Category, slug=slug)
+
+            posts = Post.postobjects.filter(category=category).select_related("category").prefetch_related(
+                Prefetch("post_analytics", to_attr="analytics_cache")
+            )
+
+            if not posts.exists():
+                raise NotFound(detail=f"No Posts Found For Category '{category.name}' ")
+
+            serialized_posts = PostListSerializer(posts, many=True).data
+
+            return self.paginate(request, serialized_posts)
+        except Exception as e:
+            raise APIException(detail=f"An unexpected Error occurred: {str(e)}")
 
 class GenerateFakePostsView(StandardAPIView):
     def get(self, request):

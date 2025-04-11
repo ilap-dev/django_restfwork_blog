@@ -3,7 +3,7 @@ import logging
 import redis
 from django.conf import settings
 
-from .models import PostAnalytics, Post, CategoryAnalytics
+from .models import PostAnalytics, Post, CategoryAnalytics, Category
 
 logger = logging.getLogger(__name__)
 
@@ -38,13 +38,29 @@ def sync_impressions_to_db():
     keys = redis_client.keys("post:impressions:*")
     for key in keys:
         try:
+            # Decodificar y extraer el ID de la categoria desde la clave redis
             post_id = key.decode("utf-8").split(":")[-1]
+            try:
+                post = Post.objects.get(id=post_id)
+            except Post.DoesNotExist:
+                logger.info(f"Post with ID {post_id} does not exist")
+                continue
+
+            #Obtener Impresiones de Redis
             impressions = int(redis_client.get(key))
-            analytics, _ = PostAnalytics.objects.get_or_create(post__id=post_id)
-            #analytics.increment_impression()
+            if impressions == 0:
+                redis_client.delete(key)
+                continue
+
+            #Obtener y crear instancia de category analytics
+            analytics, created = PostAnalytics.objects.get_or_create(post=post)
+
+            #Incrementar impresiones
             analytics.impressions += impressions
             analytics.save()
+            # Actualizar la tasa de Clicks(CTR)
             analytics._update_click_through_rate()
+            #Elimnar la clave de redis despues de sincronizar
             redis_client.delete(key)
         except Exception as e:
             logger.info(f"Error syncing impressions for {key}:{str(e)}")
@@ -56,12 +72,29 @@ def sync_category_impressions_to_db():
     keys = redis_client.keys("category:impressions:*")
     for key in keys:
         try:
+            #Decodificar y extraer el ID de la categoria desde la clave redis
             category_id = key.decode("utf-8").split(":")[-1]
+            #Validar que la categoria existe
+            try:
+                category = Category.objects.get(id=category_id)
+            except Category.DoesNotExist:
+                logger.info(f"Category with ID {category_id} does not exist. ")
+                continue
+
+            #Obtener Impresiones de Redis
             impressions = int(redis_client.get(key))
-            analytics, _ = CategoryAnalytics.objects.get_or_create(category__id=category_id)
+            if impressions == 0:
+                redis_client.delete(key)
+                continue
+
+            #Obtener y crear instancia de category analytics
+            analytics, created = CategoryAnalytics.objects.get_or_create(category=category)
+            #Imcrementar impressiones
             analytics.impressions += impressions
             analytics.save()
+            #Actualizar la tasa de Clicks
             analytics._update_click_through_rate()
+            #Eliminar la clave de redis
             redis_client.delete(key)
         except Exception as e:
             logger.info(f"Error syncing category impressions for {key}:{str(e)}")
