@@ -12,7 +12,7 @@ class MediaSerializer(serializers.ModelSerializer):
     url = serializers.SerializerMethodField()
 
     class Meta:
-        model = Media,
+        model = Media
         fields = "__all__"
     def get_url(self, obj):
         if not obj.key:
